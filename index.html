@@ -308,6 +308,88 @@ function animateValue(id, start, end, duration) {
  requestAnimationFrame(step);
 }
 
-
 animateValue("totalProfit", 0, total, 1000);
+
+<!DOCTYPE html><html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prime Vest Global</title><!-- Firebase --><script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script><style>
+body{font-family:Arial;background:#020617;color:white;text-align:center}
+.btn{padding:10px;background:gold;border:none;margin:5px;border-radius:8px}
+input{padding:10px;margin:5px;border-radius:8px;border:none}
+.card{background:#111827;padding:15px;margin:10px;border-radius:10px}
+img{width:80px;margin-top:10px}
+</style></head><body><img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png">
+<h1>💰 Prime Vest Global</h1><div id="auth">
+<input id="email" placeholder="Email"><br>
+<input id="password" type="password" placeholder="Password"><br>
+<button class="btn" onclick="register()">Register</button>
+<button class="btn" onclick="login()">Login</button>
+</div><div id="dashboard" style="display:none">
+<h2>Dashboard</h2>
+<p>Balance: ₦<span id="balance">0</span></p>
+<p>Total Profit: ₦<span id="totalProfit">0</span></p>
+<p>Referral: <span id="ref"></span></p><div class="card">
+<h3>Deposit</h3>
+<input type="number" id="amount" placeholder="Amount"><br>
+<button class="btn" onclick="deposit()">Deposit</button>
+</div><div class="card">
+<h3>Withdraw</h3>
+<input type="number" id="withdrawAmt" placeholder="Amount"><br>
+<button class="btn" onclick="withdraw()">Withdraw</button>
+</div><div class="card">
+<h3>Transactions</h3>
+<ul id="tx"></ul>
+</div>
+</div><script>
+const firebaseConfig={
+ apiKey:"AIzaSyAqSWFaxxlQJXbo5KkhJ9JlkWfq-l51lAw",
+ authDomain:"prime-vest-global.firebaseapp.com",
+ projectId:"prime-vest-global",
+ storageBucket:"prime-vest-global.firebasestorage.app"
+};
+firebase.initializeApp(firebaseConfig);
+
+const auth=firebase.auth();
+const db=firebase.firestore();
+
+let uid;
+
+function register(){
+ auth.createUserWithEmailAndPassword(email.value,password.value)
+ .then(res=>{
+  uid=res.user.uid;
+  db.collection('users').doc(uid).set({balance:0});
+  alert('Registered');
+ });
+}
+
+function login(){
+ auth.signInWithEmailAndPassword(email.value,password.value)
+ .then(res=>{uid=res.user.uid;load();});
+}
+
+function load(){
+ document.getElementById('auth').style.display='none';
+ document.getElementById('dashboard').style.display='block';
+
+ db.collection('users').doc(uid).onSnapshot(doc=>{
+  balance.innerText=doc.data().balance;
+ });
+}
+
+function deposit(){
+ let amt=parseInt(amount.value);
+ db.collection('transactions').add({uid,amount:amt,type:'Deposit'});
+ alert('Deposit submitted');
+}
+
+function withdraw(){
+ let amt=parseInt(withdrawAmt.value);
+ db.collection('transactions').add({uid,amount:amt,type:'Withdraw'});
+ alert('Withdrawal requested');
+}
+</script></body>
+</html>
 
