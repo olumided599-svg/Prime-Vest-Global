@@ -1,0 +1,312 @@
+<!DOCTYPE html><html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prime Vest Global</title><style>
+body{font-family:Arial;background:#020617;color:white;text-align:center}
+.btn{padding:10px;background:gold;border:none;margin:5px;cursor:pointer;border-radius:8px}
+input{padding:10px;margin:5px;border-radius:8px;border:none}
+.card{background:#111827;padding:15px;margin:10px;border-radius:10px}
+.admin{background:#1f2937;padding:10px;margin:10px;border-radius:10px}
+.popup{position:fixed;bottom:20px;left:20px;background:#111827;padding:10px;border-radius:10px;animation:fade 5s infinite}
+.logo{width:120px;margin-top:10px}
+.banner{width:100%;border-radius:10px}
+@keyframes fade{0%{opacity:0}10%{opacity:1}90%{opacity:1}100%{opacity:0}}
+</style></head><body><img src="logo.jpg" class="logo">
+<h1>💰 Prime Vest Global</h1><div id="popup" class="popup"></div><div id="auth">
+<input id="email" placeholder="Email"><br>
+<input id="password" type="password" placeholder="Password"><br>
+<button class="btn" onclick="register()">Register</button>
+<button class="btn" onclick="login()">Login</button>
+</div><div id="dashboard" style="display:none">
+<img src="banner.jpg" class="banner"><h2>Dashboard</h2>
+<p>Balance: ₦<span id="balance">0</span></p>
+<p>Plan Duration: <b>60 Days</b></p>
+<p>Total Profit: ₦<span id="totalProfit">0</span></p>
+<p>Estimated Total Return: ₦<span id="totalReturn">0</span></p>
+<p>Time Left: <span id="countdown">0 days</span></p><p>Your Referral Link:</p>
+<input id="refLink" readonly style="width:90%"><br>
+<button class="btn" onclick="copyRef()">Copy Link</button><div class="card">
+<h3>Investment Packages (Daily Profit)</h3>
+<button class="btn" onclick="invest(3000)">₦3,000 → ₦750/day</button>
+<button class="btn" onclick="invest(5000)">₦5,000 → ₦1,250/day</button>
+<button class="btn" onclick="invest(10000)">₦10,000 → ₦2,500/day</button>
+<button class="btn" onclick="invest(15000)">₦15,000 → ₦3,750/day</button>
+<button class="btn" onclick="invest(20000)">₦20,000 → ₦5,000/day</button>
+<button class="btn" onclick="invest(25000)">₦25,000 → ₦6,250/day</button>
+<button class="btn" onclick="invest(40000)">₦40,000 → ₦10,000/day</button>
+<button class="btn" onclick="invest(50000)">₦50,000 → ₦12,500/day</button>
+</div><div class="card">
+<h3>Deposit</h3>
+<p><b>Bank:</b> Moniepoint MFB</p>
+<p><b>Name:</b> Kamsi Chosen Oragwam</p>
+<p><b>Account:</b> 5075903950</p>
+<input type="number" id="amount" placeholder="Amount"><br>
+<button class="btn" onclick="deposit()">I Have Paid</button>
+</div><div class="card">
+<h3>Withdraw</h3>
+<input type="number" id="withdrawAmt" placeholder="Amount"><br>
+<button class="btn" onclick="withdraw()">Request Withdrawal</button>
+</div><div class="card">
+<h3>Transactions</h3>
+<ul id="tx"></ul>
+</div>
+</div><div id="adminPanel" class="admin" style="display:none">
+<h2>Admin Panel</h2>
+<ul id="adminTx"></ul>
+</div><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>
+
+const supabaseUrl = "https://qrwrsveyrdrytadosflu.supabase.co";
+const supabaseKey = "sb_publishable_ZnCJneZp193VNyZgs1ag8w_yVDkLlLy";
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+let userId = null;
+
+function getRef(){
+ const params = new URLSearchParams(window.location.search);
+ return params.get('ref');
+}
+
+async function register(){
+ let ref = getRef();
+ let { data } = await supabase.auth.signUp({ email: email.value, password: password.value });
+ if(data.user){
+  await supabase.from('users').insert([{ id: data.user.id, balance: 0, ref_by: ref }]);
+ }
+ alert("Registered");
+}
+
+async function login(){
+ let { data } = await supabase.auth.signInWithPassword({ email: email.value, password: password.value });
+ userId = data.user.id;
+ load();
+}
+
+async function load(){
+ auth.style.display='none';
+ dashboard.style.display='block';
+ refLink.value = window.location.origin + "?ref=" + userId;
+
+ let { data } = await supabase.from('users').select('*').eq('id', userId).single();
+ balance.innerText = data.balance;
+
+ loadTransactions();
+ calcProfit();
+
+ if(userId === "c3035897-398d-4d52-a89a-dd2ba5c2d459
+"){
+  adminPanel.style.display='block';
+  loadAdmin();
+ }
+}
+
+function copyRef(){
+ refLink.select();
+ document.execCommand("copy");
+ alert("Copied!");
+}
+
+async function invest(amount){
+ await supabase.from('investments').insert([{ user_id: userId, amount: amount, rate: 0.25, start_date: new Date() }]);
+ alert('Investment started');
+}
+
+async function deposit(){
+ let amt = parseInt(amount.value);
+ await supabase.from('transactions').insert([{ user_id: userId, amount: amt, type: 'deposit', status: 'pending' }]);
+ alert('Deposit sent for approval');
+ loadTransactions();
+}
+
+// WITHDRAW WITH 5% FEE + MIN 3000
+async function withdraw(){
+ let { data:inv } = await supabase.from('investments').select('*').eq('user_id', userId);
+
+ if(!inv || inv.length === 0){
+  alert('❌ You must invest before withdrawing');
+  return;
+ }
+
+ let amt = parseInt(withdrawAmt.value);
+
+ if(amt < 3000){
+  alert('Minimum withdrawal is ₦3000');
+  return;
+ }
+
+ let fee = Math.floor(amt * 0.05);
+ let finalAmount = amt - fee;
+
+ await supabase.from('transactions').insert([
+  { user_id: userId, amount: amt, fee: fee, final_amount: finalAmount, type: 'withdraw', status: 'pending' }
+ ]);
+
+ alert(`Withdrawal requested\nAmount: ₦${amt}\nFee (5%): ₦${fee}\nYou will receive: ₦${finalAmount}`);
+ loadTransactions();
+}
+
+async function loadTransactions(){
+ let { data } = await supabase.from('transactions').select('*').eq('user_id', userId);
+ tx.innerHTML = '';
+ data.forEach(t => {
+  let li = document.createElement('li');
+  li.innerText = t.type + ' ₦' + t.amount + ' (' + t.status + ')';
+  tx.appendChild(li);
+ });
+}
+
+async function loadAdmin(){
+ let { data } = await supabase.from('transactions').select('*').eq('status','pending');
+ adminTx.innerHTML='';
+ data.forEach(t=>{
+  let li=document.createElement('li');
+  li.innerHTML = `${t.type} ₦${t.amount} <button onclick="approve('${t.id}','${t.type}',${t.amount},'${t.user_id}')">Approve</button>`;
+  adminTx.appendChild(li);
+ });
+}
+
+async function approve(id,type,amount,uid){
+ await supabase.from('transactions').update({status:'approved'}).eq('id',id);
+
+ let { data:user } = await supabase.from('users').select('*').eq('id',uid).single();
+
+ if(type === 'deposit'){
+  await supabase.from('users').update({balance:user.balance + amount}).eq('id',uid);
+
+  if(user.ref_by){
+    let bonus = amount * 0.1;
+    let { data:refUser } = await supabase.from('users').select('*').eq('id',user.ref_by).single();
+    await supabase.from('users').update({balance:refUser.balance + bonus}).eq('id',user.ref_by);
+  }
+ }
+
+ if(type === 'withdraw'){
+  await supabase.from('users').update({balance:user.balance - amount}).eq('id',uid);
+ }
+
+ alert('Approved');
+ loadAdmin();
+}
+
+async function calcProfit(){
+ let { data:inv } = await supabase.from('investments').select('*').eq('user_id',userId);
+ let now = new Date().getTime();
+ let total = 0;
+ let invested = 0;
+ let maxRemaining = 0;
+
+ if(inv){
+ inv.forEach(item=>{
+  let start = new Date(item.start_date).getTime();
+  let days = Math.floor((now-start)/(1000*60*60*24));
+  if(days>60) days=60;
+
+  let remaining = 60 - days;
+  if(remaining > maxRemaining) maxRemaining = remaining;
+
+  let profit = item.amount * item.rate * days;
+  total += profit;
+  invested += item.amount;
+ });
+ }
+
+ totalProfit.innerText = total.toFixed(2);
+ document.getElementById('totalReturn').innerText = (total + invested).toFixed(2);
+ document.getElementById('countdown').innerText = maxRemaining + " days left";
+} = await supabase.from('investments').select('*').eq('user_id',userId);
+ let now = new Date().getTime();
+ let total = 0;
+ let invested = 0;
+
+ if(inv){
+ inv.forEach(item=>{
+  let start = new Date(item.start_date).getTime();
+  let days = Math.floor((now-start)/(1000*60*60*24));
+  if(days>60) days=60;
+
+  let profit = item.amount * item.rate * days;
+  total += profit;
+  invested += item.amount;
+ });
+ }
+
+ totalProfit.innerText = total.toFixed(2);
+ document.getElementById('totalReturn').innerText = (total + invested).toFixed(2);
+}
+
+// FAKE POPUP
+const names = ['John','Mike','Sarah','David','Emma','Daniel'];
+function randomPopup(){
+ let name = names[Math.floor(Math.random()*names.length)];
+ let amount = Math.floor(Math.random()*50000)+3000;
+ popup.innerText = `${name} just deposited ₦${amount}`;
+}
+setInterval(randomPopup,4000);
+
+</script></body>
+</html>
+
+<div id="popup" style="
+position:fixed;
+bottom:20px;
+left:20px;
+background:#16a34a;
+color:white;
+padding:10px 15px;
+border-radius:10px;
+font-size:14px;
+display:none;
+z-index:999;
+"></div>
+
+let names = ["John","David","Blessing","Emeka","Aisha","Samuel","Mary","Daniel"];
+let popup = document.getElementById("popup");
+
+function randomPopup(){
+ let name = names[Math.floor(Math.random()*names.length)];
+ let amount = Math.floor(Math.random()*50000)+3000;
+
+ popup.innerText = `${name} just deposited ₦${amount}`;
+ popup.style.display = "block";
+
+ setTimeout(()=>{
+  popup.style.display = "none";
+ },3000);
+}
+
+setInterval(randomPopup,4000);
+
+async function withdraw(){
+ let { data:inv } = await supabase.from('investments')
+ .select('*')
+ .eq('user_id',userId);
+
+ if(!inv || inv.length === 0){
+  alert("⚠️ You must invest before withdrawal");
+  return;
+ }
+
+ // continue withdrawal
+}
+
+let progress = (days / 60) * 100;
+document.getElementById("progressBar").style.width = progress + "%";
+
+function animateValue(id, start, end, duration) {
+ let obj = document.getElementById(id);
+ let range = end - start;
+ let startTime = null;
+
+ function step(timestamp) {
+  if (!startTime) startTime = timestamp;
+  let progress = Math.min((timestamp - startTime) / duration, 1);
+  obj.innerText = (start + range * progress).toFixed(2);
+  if (progress < 1) {
+    requestAnimationFrame(step);
+  }
+ }
+ requestAnimationFrame(step);
+}
+
+animateValue("totalProfit", 0, total, 1000);
+
